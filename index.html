@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Meshy Viewer — decrypt · render · convert</title>
-<meta name="description" content="Pure client-side decoder for Meshy AI .meshy files: AES-256-GCM decrypt via WebCrypto, three.js rendering, export to GLB/GLTF/OBJ/STL/PLY. No server, runs entirely in your browser." />
+<title>Meshy Viewer — decrypt · render · animate · convert</title>
+<meta name="description" content="Pure client-side decoder for Meshy AI .meshy files and animated GLB exports: AES-256-GCM decrypt via WebCrypto, three.js rendering with skinning + animation playback, HDRI environments, export to GLB/GLTF/OBJ/STL/PLY plus texture, skeleton and animation extraction. No server, runs entirely in your browser." />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🧊</text></svg>" />
 <style>
   :root {
@@ -38,7 +38,7 @@
   .toolbar {
     position: fixed; top: 14px; right: 14px; z-index: 10;
     display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
-    max-width: 60vw;
+    max-width: 52vw;
   }
   .group {
     display: flex; gap: 6px; align-items: center;
@@ -55,7 +55,13 @@
   button.active { background: var(--accent); border-color: var(--accent); color: #08221d; font-weight: 600; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #08221d; font-weight: 600; }
   button.primary:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .38; cursor: not-allowed; }
   input[type="file"] { display: none; }
+  select {
+    font: inherit; font-size: 12.5px; color: var(--text); background: #1c2230;
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; max-width: 170px;
+  }
+  input[type="range"] { accent-color: var(--accent); height: 4px; cursor: pointer; }
 
   #panel {
     position: fixed; left: 18px; bottom: 18px; z-index: 10;
@@ -66,13 +72,27 @@
   #panel.hidden { display: none; }
   #panel h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); }
   #panel .row { display: flex; gap: 8px; margin: 3px 0; font-size: 12.5px; }
-  #panel .row b { color: var(--dim); font-weight: 500; min-width: 74px; }
+  #panel .row b { color: var(--dim); font-weight: 500; min-width: 74px; flex-shrink: 0; }
   #panel .row span { color: var(--text); word-break: break-all; }
+
+  /* animation bar */
+  #animbar {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 8px 12px; backdrop-filter: blur(6px); max-width: 92vw;
+  }
+  #animbar.hidden { display: none; }
+  #animbar .time { font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; min-width: 74px; text-align: center; }
+  #animbar input[type="range"] { width: 150px; }
+  #speed-val { font-size: 11.5px; color: var(--dim); min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+  #btn-play { min-width: 42px; font-size: 15px; line-height: 1; }
 
   #banner {
     position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 30;
     max-width: 70vw; padding: 10px 16px; border-radius: 10px; font-size: 13px;
     background: rgba(74, 222, 128, .12); border: 1px solid rgba(74, 222, 128, .5); color: var(--ok);
+    text-align: center;
   }
   #banner.error { background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .55); color: var(--danger); }
   #banner.hidden { display: none; }
@@ -90,9 +110,10 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  @media (max-width: 760px) {
-    #panel { max-width: calc(100vw - 36px); }
+  @media (max-width: 900px) {
+    #panel { max-width: calc(100vw - 36px); min-width: 0; }
     .toolbar { max-width: calc(100vw - 28px); }
+    #animbar { flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 24px); bottom: 12px; }
   }
 </style>
 </head>
@@ -101,12 +122,13 @@
 
   <div class="brand">
     <h1>meshy<span>.viewer</span></h1>
-    <p>decrypt · render · convert — 100% client-side · <a href="FORMAT.md" target="_blank">format docs</a></p>
+    <p>decrypt · render · animate · convert — 100% client-side · <a href="FORMAT.md" target="_blank">format docs</a></p>
   </div>
 
   <div class="toolbar">
     <div class="group">
-      <button id="btn-sample" title="Load the bundled sample">Sample</button>
+      <button id="btn-sample" title="Load the bundled static sample (.meshy)">Sample</button>
+      <button id="btn-walk" title="Load the bundled animated demo (GLB with skin + walk cycle)">Walk demo</button>
       <button class="primary" id="btn-open">Open file…</button>
       <input type="file" id="file-input" accept=".meshy,.glb,.gltf" />
     </div>
@@ -118,16 +140,42 @@
       <button id="btn-reset" title="Reset camera">Reset</button>
     </div>
     <div class="group">
+      <span class="label">env</span>
+      <select id="env-select" title="Environment lighting">
+        <option value="studio" selected>Studio lights</option>
+        <option value="meshy">Meshy HDRI (decor shop)</option>
+        <option value="custom">Custom file…</option>
+      </select>
+      <input type="file" id="env-input" accept=".hdr,.exr" />
+      <button id="btn-envbg" title="Show environment as background">BG</button>
+    </div>
+    <div class="group">
       <span class="label">export</span>
-      <button data-export="glb" title="glTF binary — textures embedded">GLB</button>
-      <button data-export="gltf" title="glTF JSON">glTF</button>
+      <button data-export="glb" title="glTF binary — geometry, skin, animations and textures embedded">GLB</button>
+      <button data-export="gltf" title="glTF JSON (embedded buffers)">glTF</button>
       <button data-export="obj" title="Wavefront OBJ (geometry only)">OBJ</button>
       <button data-export="stl" title="Binary STL (geometry only)">STL</button>
       <button data-export="ply" title="PLY (geometry + vertex colors)">PLY</button>
     </div>
+    <div class="group">
+      <span class="label">extract</span>
+      <button id="btn-extex" title="Extract original texture images from the GLB">Textures</button>
+      <button id="btn-exskel" title="Extract skeleton hierarchy (bind pose) as JSON">Skeleton</button>
+      <button id="btn-exanim" title="Extract animation keyframes as JSON">Anims</button>
+    </div>
   </div>
 
   <div id="banner" class="hidden"></div>
+
+  <div id="animbar" class="hidden">
+    <button id="btn-play" title="Play / pause">⏸</button>
+    <select id="clip-select" title="Animation clip"></select>
+    <input type="range" id="timeline" min="0" max="1000" value="0" title="Timeline" />
+    <span class="time" id="anim-time">0.00 / 0.00 s</span>
+    <input type="range" id="speed" min="0" max="2.5" step="0.05" value="1" title="Playback speed" style="width:90px" />
+    <span id="speed-val">1.00×</span>
+    <button id="btn-skeleton" title="Overlay the skeleton">Bones</button>
+  </div>
 
   <div id="panel" class="hidden">
     <h2>Model</h2>
@@ -135,6 +183,7 @@
     <div class="row"><b>source</b><span id="stat-source">—</span></div>
     <div class="row"><b>container</b><span id="stat-container">—</span></div>
     <div class="row"><b>geometry</b><span id="stat-mesh">—</span></div>
+    <div class="row"><b>rig / anim</b><span id="stat-rig">—</span></div>
     <div class="row"><b>timing</b><span id="stat-time">—</span></div>
   </div>
 

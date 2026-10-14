@@ -4,6 +4,10 @@ Reverse-engineered from binary analysis of a `model.meshy` asset and Meshy's own
 `loader-worker` / `mesh_loader.wasm` runtime. Documented here for interoperability
 with assets you generated yourself.
 
+A second, closely related finding: Meshy's **animated exports** (rhythm /
+animation tasks — `*_withSkin.glb` etc.) are **not** wrapped in this container.
+See the last section.
+
 ## TL;DR
 
 A `.meshy` file is a **thin encryption wrapper around a standard glTF 2.0 binary
@@ -114,3 +118,40 @@ bundled viewer's *Export* buttons do.
   `gltfpack ≥ 1.x` can make it fail with `meshopt decompression failed for
   bufferView 0` even when intact. A current MeshoptDecoder (as used here)
   decodes them fine.
+
+---
+
+# Animated exports (`*_withSkin.glb`, `*_animation.glb`, …)
+
+Animation tasks (e.g. task `51a30d03-04ab-43ff-b2d0-083a307f10c2`,
+`Animation_Walking_withSkin.glb`) ship as **plain, unencrypted GLB** — no
+`MESHY.AI` container, no AES, no meshopt. There is nothing to reverse-engineer
+beyond standard glTF 2.0, but here is what Meshy actually puts inside
+(observed on a 16,113,308-byte sample):
+
+| Property | Observed value |
+|---|---|
+| generator | `Khronos glTF Blender I/O v4.0.43` |
+| extensionsUsed | `KHR_materials_specular`, `KHR_materials_ior` |
+| extensionsRequired | *(none)* |
+| scene graph | 1 mesh + 1 skin ("Armature"), 24 joints, Mixamo-style naming (`Hips`, `Spine`, `Spine01`, `LeftUpLeg`, `RightHand`, …) |
+| animations | 1 clip, name `Armature\|walking_man\|baselayer`, 72 channels (TRS for all 24 joints), ~1.067 s @ 30 fps sampling |
+| textures | 1 embedded PNG (`texture_0`) + specular/roughness maps via plain bufferViews — no WebP/KTX2, no quantization |
+| accessors | mostly `FLOAT` (5126), plus `UNSIGNED_BYTE` (5121) joint indices and `UNSIGNED_SHORT` (5123) weights — i.e. **no `KHR_mesh_quantization`** |
+
+Implications:
+
+* Any glTF 2.0 loader renders animated exports directly — three.js
+  `GLTFLoader` needs **no** MeshoptDecoder for these files (it is still set up
+  for the static `.meshy` path and harmless here).
+* The same viewer handles both: `loadModelBuffer()` sniffs the first bytes —
+  `MESHY.AI` → AES decrypt → meshopt GLB; `glTF` → use as-is.
+* Texture bytes sit in ordinary `BIN`-chunk bufferViews, so they can be pulled
+  out verbatim — the viewer's *Extract → Textures* button does exactly that
+  (`extractGLBImages()` in `js/meshy-loader.js`).
+* CloudFront signatures are per-URL: you cannot derive the animated task's
+  `model.meshy` URL from a signed `*.glb` URL (HTTP 403), and Meshy's web
+  viewer lights these previews with an HDRI from
+  `https://cdn.meshy.ai/webapp-assets/viewer/hdri/*.exr` — those EXR files are
+  served **without** a signature (the bundled `env/decor_shop_2k_Lower45Sat.exr`
+  is one of them, used by the *env* selector).

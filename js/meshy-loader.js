@@ -134,3 +134,56 @@ export async function loadModelBuffer(buffer) {
   }
   throw new Error("Unrecognized file: expected .meshy, .glb or .gltf");
 }
+
+/**
+ * Extract the original, untouched image payloads embedded in a GLB container
+ * (both encrypted .meshy files after decryption and plain animated exports).
+ * Meshy stores textures as regular bufferViews — meshopt only compresses
+ * geometry views — so the bytes are exactly the source PNG/JPEG/WebP/KTX2.
+ *
+ * @param {ArrayBuffer} buffer raw GLB (e.g. the `data` returned by loadModelBuffer)
+ * @returns {Array<{name:string, mimeType:string, ext:string, bytes:Uint8Array|null, uri:string|null}>}
+ */
+export function extractGLBImages(buffer) {
+  const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (u8.length < 20 || magicOf(u8, 4) !== "glTF") {
+    throw new Error("Not a GLB container");
+  }
+  const jsonLen = u32le(u8, 12);
+  const jsonType = u32le(u8, 16);
+  if (jsonType !== 0x4e4f534a /* "JSON" */) {
+    throw new Error("GLB: first chunk is not JSON");
+  }
+  const json = JSON.parse(new TextDecoder().decode(u8.subarray(20, 20 + jsonLen)));
+
+  // locate the BIN chunk
+  let off = 20 + jsonLen, binStart = -1;
+  while (off + 8 <= u8.length) {
+    const len = u32le(u8, off);
+    const type = u32le(u8, off + 4);
+    if (type === 0x004e4942 /* "BIN\0" */) { binStart = off + 8; break; }
+    off += 8 + len;
+  }
+
+  const views = json.bufferViews ?? [];
+  return (json.images ?? []).map((img, i) => {
+    const fallbackExt = img.mimeType === "image/jpeg" ? "jpg" : (img.mimeType ?? "image/png").split("/")[1];
+    if (img.uri != null) {
+      return { name: img.name || `texture_${i}`, mimeType: img.mimeType || "image/png", ext: fallbackExt, bytes: null, uri: img.uri };
+    }
+    if (binStart < 0 || img.bufferView == null) {
+      return { name: img.name || `texture_${i}`, mimeType: img.mimeType || "image/png", ext: fallbackExt, bytes: null, uri: null };
+    }
+    const bv = views[img.bufferView] ?? {};
+    const start = binStart + (bv.byteOffset ?? 0);
+    const end = start + bv.byteLength;
+    if (end > u8.length) throw new Error(`GLB: image ${i} bufferView out of range`);
+    return {
+      name: img.name || `texture_${i}`,
+      mimeType: img.mimeType || "image/png",
+      ext: fallbackExt,
+      bytes: u8.slice(start, end),
+      uri: null,
+    };
+  });
+}

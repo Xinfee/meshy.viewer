@@ -1,9 +1,10 @@
 # meshy-viewer
 
 A **100% client-side** viewer and converter for [Meshy AI](https://www.meshy.ai)
-`.meshy` model files — decrypts, renders with three.js, and converts to
-standard 3D formats. No server, no build step: deploy the folder as-is to
-**GitHub Pages** (or any static host).
+model exports — decrypts `.meshy` containers, renders static *and* **animated**
+(skeletal) models with three.js, plays animation clips, lights with HDRI
+environments, and converts/extracts to standard formats. No server, no build
+step: deploy the folder as-is to **GitHub Pages** (or any static host).
 
 ![viewer](https://img.shields.io/badge/three.js-r170-049EF2) ![deps](https://img.shields.io/badge/dependencies-0-brightgreen) ![crypto](https://img.shields.io/badge/crypto-WebCrypto%20AES--GCM-blue)
 
@@ -12,10 +13,24 @@ standard 3D formats. No server, no build step: deploy the folder as-is to
 | Step | How |
 |---|---|
 | Decrypt `.meshy` → GLB | AES-256-GCM via the browser's native `crypto.subtle` (see [FORMAT.md](FORMAT.md)) |
+| Load animated exports | `*_withSkin.glb` etc. are plain GLB — auto-detected by magic bytes |
 | Render | three.js `GLTFLoader` + `MeshoptDecoder` (also Draco / KTX2-ready) |
-| Convert | one-click export to **GLB / glTF / OBJ / STL / PLY** — pure JS exporters |
+| Animate | `AnimationMixer` playback: clip picker, play/pause, timeline scrub, 0–2.5× speed, `SkeletonHelper` bone overlay |
+| Light | Studio lights or HDRI — bundled Meshy decor-shop EXR, or drop your own `.hdr` / `.exr` (ACES tone mapping, optional as background) |
+| Convert | one-click export to **GLB / glTF / OBJ / STL / PLY** — GLB/glTF keep **skin + animations + textures** |
+| Extract | original texture images (verbatim bytes from the GLB), skeleton hierarchy JSON (bind pose), full animation keyframe JSON |
 
 Everything runs in the browser. Your model never leaves your machine.
+
+## Supported inputs
+
+* `*.meshy` — Meshy's encrypted static container (AES-256-GCM + meshopt, see
+  [FORMAT.md](FORMAT.md))
+* `*.glb` / `*.gltf` — any glTF 2.0 file, including Meshy's animated
+  `Animation_*_withSkin.glb` exports (Mixamo-style rigs, embedded textures)
+* `.hdr` / `.exr` — environment maps for the lighting selector
+
+Drag & drop anywhere, or use *Open file…*.
 
 ## Run it locally
 
@@ -31,32 +46,39 @@ will not work (blocked `crypto.subtle` + module CORS).
 
 ## Deploy to GitHub Pages
 
-1. Push this folder to a repository (the `sample/` subfolder is optional but
-   gives visitors a working demo out of the box — delete it if you don't want
-   a 5.7 MB asset in your repo, the viewer works without it).
+1. Push this folder to a repository (the `sample/` and `env/` subfolders are
+   optional but give visitors working static + animated demos out of the box —
+   together ≈ 21 MB; delete them if you want a slim repo, the viewer works
+   without them).
 2. Repo **Settings → Pages → Deploy from branch** → `main` / root.
 3. Done: `https://<user>.github.io/<repo>/`.
-
-Features: drag & drop `.meshy` / `.glb` / `.gltf` anywhere, or use *Open file…*;
-wireframe / spin / grid / reset; live stats (vertices, triangles, textures,
-decrypt+parse timing); export buttons.
 
 ## Files
 
 ```
-index.html            UI shell (import map loads three.js r170 from jsDelivr)
-js/meshy-loader.js    pure-JS .meshy → GLB decoder (WebCrypto AES-256-GCM)
-js/main.js            scene, controls, stats, exporters
-sample/model.meshy    bundled sample asset (optional)
-FORMAT.md             full reverse-engineered container specification
+index.html                          UI shell (import map loads three.js r170 from jsDelivr)
+js/meshy-loader.js                  pure-JS .meshy → GLB decoder + GLB texture extractor
+js/main.js                          scene, animation playback, HDRI, exporters, extractors
+sample/model.meshy                  bundled static sample (optional)
+sample/Animation_Walking_withSkin.glb  bundled animated demo: 24-bone rig + walk cycle (optional)
+env/decor_shop_2k_Lower45Sat.exr    bundled HDRI environment (optional)
+FORMAT.md                           reverse-engineered container spec + animated-export findings
 ```
 
 ## Notes & limits
 
-* The bundled sample is a *textured* AI mesh (511k vertices, 954k triangles,
-  3 WebP textures) — a good stress test.
-* OBJ/STL exports geometry only (no materials) — that's a limitation of the
-  formats themselves, not the exporter.
+* The bundled static sample is a *textured* AI mesh (511k vertices, 954k
+  triangles, 3 WebP textures) — a good stress test. The animated demo is a
+  24-joint Mixamo-style rig with a 1.07 s walk cycle.
+* GLB/glTF exports are written from the **bind pose** with all animation clips
+  attached (same convention as Meshy's own exports). OBJ/STL/PLY always carry
+  bind-pose geometry — those formats simply have no skeleton/animation concept.
+* GLTF re-export does not round-trip Meshy's `KHR_materials_specular` /
+  `KHR_materials_ior` (three.js exporter limitation); base colour, normal and
+  metallic-roughness maps survive intact.
+* Texture extraction pulls the **original embedded bytes** (PNG/JPEG/WebP) out
+  of the GLB `BIN` chunk — no canvas re-encode. WebP files may need a browser
+  or converter to view.
 * If a `.meshy` file was truncated in transit, decryption still succeeds but
   the meshopt stream fails; the viewer detects this and tells you to
   re-download. (Seen in the wild — see FORMAT.md "gotchas".)
