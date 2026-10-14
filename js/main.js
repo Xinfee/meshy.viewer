@@ -53,10 +53,10 @@ const grid = new THREE.GridHelper(10, 20, 0x334455, 0x1d2430);
 grid.position.y = -0.0001;
 scene.add(grid);
 
-// loaders
-const draco = new DRACOLoader().setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+// loaders — decoders are vendored alongside the library (fully self-hosted)
+const draco = new DRACOLoader().setDecoderPath("vendor/draco/");
 const ktx2 = new KTX2Loader()
-  .setTranscoderPath("https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/basis/")
+  .setTranscoderPath("vendor/basis/")
   .detectSupport(renderer);
 
 const gltfLoader = new GLTFLoader()

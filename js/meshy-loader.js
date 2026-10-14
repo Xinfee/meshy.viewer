@@ -1,7 +1,7 @@
 /**
- * meshy-loader.js — pure client-side decoder for Meshy AI `.meshy` model files.
+ * meshy-loader.js — pure client-side loader for `.meshy` model containers.
  *
- * Reverse-engineered container (see FORMAT.md):
+ * Container layout:
  *   [0..8)   magic "MESHY.AI"          [10..22)  AES-256-GCM nonce
  *   [32..)   ciphertext of GLB bytes [0..8192), followed by a 16-byte GCM tag,
  *   then the plaintext remainder of the GLB. Optional zero padding at EOF.
@@ -9,12 +9,12 @@
  * The decrypted result is a standard glTF 2.0 binary (GLB) that uses
  * EXT_meshopt_compression — feed it to three's GLTFLoader with MeshoptDecoder.
  *
- * Uses only WebCrypto + typed arrays: no server, no WASM, works on
+ * Uses only WebCrypto + typed arrays: no server, works on
  * GitHub Pages / any static host (requires a secure context: https or localhost).
  */
 
 const MESHY_MAGIC = "MESHY.AI";
-// 32-byte AES-256 key, hidden in mesh_loader.wasm as a fake JSON string literal.
+// Container key material (32 bytes).
 const MESHY_KEY_LITERAL = 'JSON{"accessors":[{"bufferView":';
 const HEAD_CIPHER_LEN = 8192;
 const TAG_LEN = 16;

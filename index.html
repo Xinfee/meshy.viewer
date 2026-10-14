@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Meshy Viewer — decrypt · render · animate · convert</title>
-<meta name="description" content="Pure client-side decoder for Meshy AI .meshy files and animated GLB exports: AES-256-GCM decrypt via WebCrypto, three.js rendering with skinning + animation playback, HDRI environments, export to GLB/GLTF/OBJ/STL/PLY plus texture, skeleton and animation extraction. No server, runs entirely in your browser." />
+<meta name="description" content="Pure client-side 3D model viewer and converter for .meshy containers and standard GLB/glTF files: three.js rendering with skinning and animation playback, HDRI environments, export to GLB/GLTF/OBJ/STL/PLY plus texture, skeleton and animation extraction. No server, runs entirely in your browser." />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🧊</text></svg>" />
 <style>
   :root {
@@ -159,7 +159,7 @@
 
   <div class="brand">
     <h1>meshy<span>.viewer</span></h1>
-    <p>decrypt · render · animate · convert — 100% client-side · <a href="FORMAT.md" target="_blank">format docs</a></p>
+    <p>decrypt · render · animate · convert — 100% client-side</p>
   </div>
 
   <div class="toolbar">
@@ -254,8 +254,8 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/addons/"
     }
   }
   </script>
