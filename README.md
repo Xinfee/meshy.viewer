@@ -30,7 +30,19 @@ Everything runs in the browser. Your model never leaves your machine.
   `Animation_*_withSkin.glb` exports (Mixamo-style rigs, embedded textures)
 * `.hdr` / `.exr` — environment maps for the lighting selector
 
-Drag & drop anywhere, or use *Open file…*.
+The workspace starts **empty** — nothing is loaded until you ask for it. Hit
+the **Samples ▾** button (or the card in the middle of the screen) to pick one
+of the bundled demos:
+
+* **Static — encrypted .meshy container** (`sample/model.meshy`, 5.4 MB):
+  decrypted in-browser via WebCrypto; 511k verts, 3 WebP textures embedded.
+* **Animated — walking man (skinned GLB)**
+  (`sample/Animation_Walking_withSkin.glb`, 15.4 MB): 24-bone Mixamo-style
+  rig + walk cycle, PNG texture embedded.
+
+Both demos are **fully self-contained** — textures live inside the file, so
+loading the sample needs no other downloads. Your own files work the same way:
+drag & drop a `.meshy` / `.glb` / `.gltf` anywhere, or use *Open file…*.
 
 ## Run it locally
 
@@ -50,7 +62,8 @@ will not work (blocked `crypto.subtle` + module CORS).
    optional but give visitors working static + animated demos out of the box —
    together ≈ 21 MB; delete them if you want a slim repo, the viewer works
    without them).
-2. Repo **Settings → Pages → Deploy from branch** → `main` / root.
+2. Repo **Settings → Pages → Deploy from branch** → the branch hosting this
+   folder (for this repo: `gh-pages`) / root.
 3. Done: `https://<user>.github.io/<repo>/`.
 
 ## Files
@@ -67,6 +80,9 @@ FORMAT.md                           reverse-engineered container spec + animated
 
 ## Notes & limits
 
+* The workspace is empty on start; samples load on demand from the `sample/`
+  and `env/` folders (delete them for a slim repo — the viewer works without
+  them, only the Samples entries will fail).
 * The bundled static sample is a *textured* AI mesh (511k vertices, 954k
   triangles, 3 WebP textures) — a good stress test. The animated demo is a
   24-joint Mixamo-style rig with a 1.07 s walk cycle.

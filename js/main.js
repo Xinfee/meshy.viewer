@@ -307,6 +307,10 @@ async function loadEnvFromBuffer(name, buffer) {
 }
 
 /* ----------------------------------------------------------------- load */
+function updateEmptyState() {
+  $("empty-state").classList.toggle("hidden", !!currentRoot);
+}
+
 async function loadArrayBuffer(name, buffer) {
   banner("");
   disposeCurrent();
@@ -354,10 +358,12 @@ async function loadArrayBuffer(name, buffer) {
       : "static (no skeleton)";
     $("stat-time").textContent = `decrypt+parse ${parseMs} ms · full load ${loadMs} ms`;
     $("panel").classList.remove("hidden");
+    updateEmptyState();
   } catch (e) {
     console.error(e);
     banner(`${e.message ?? e}`);
     $("panel").classList.add("hidden");
+    updateEmptyState();
   } finally {
     setBusy(false);
   }
@@ -499,8 +505,29 @@ function extractAnimations() {
 /* -------------------------------------------------------------- wiring */
 $("btn-open").addEventListener("click", () => $("file-input").click());
 $("file-input").addEventListener("change", (e) => loadFile(e.target.files[0]));
-$("btn-sample").addEventListener("click", () => loadSample());
-$("btn-walk").addEventListener("click", () => loadWalkDemo());
+
+// Samples chooser: empty workspace on start; the Samples button nudges the
+// user to pick between the bundled static and animated demos.
+const samplesMenu = $("samples-menu");
+function toggleSamplesMenu(forceOpen) {
+  if (forceOpen === undefined) samplesMenu.classList.toggle("hidden");
+  else samplesMenu.classList.toggle("hidden", !forceOpen);
+}
+$("btn-samples").addEventListener("click", (e) => { e.stopPropagation(); toggleSamplesMenu(); });
+document.addEventListener("click", (e) => {
+  if (!samplesMenu.classList.contains("hidden") &&
+      !(e.target instanceof Element && e.target.closest("#samples-menu")) &&
+      e.target !== $("btn-samples")) toggleSamplesMenu(false);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleSamplesMenu(false); });
+document.querySelectorAll("#samples-menu .menu-item").forEach((b) =>
+  b.addEventListener("click", () => {
+    toggleSamplesMenu(false);
+    (b.dataset.sample === "static" ? loadSample : loadWalkDemo)();
+  }));
+// empty-workspace card shortcuts (same loaders as the menu entries)
+$("btn-es-static").addEventListener("click", () => loadSample());
+$("btn-es-animated").addEventListener("click", () => loadWalkDemo());
 document.querySelectorAll("[data-export]").forEach((b) =>
   b.addEventListener("click", () => exportModel(b.dataset.export)));
 $("btn-extex").addEventListener("click", extractTextures);
@@ -657,7 +684,10 @@ async function loadWalkDemo() {
   }
 }
 
-loadSample();
+// start with an empty workspace — no auto-loading; the Samples button and the
+// empty-state card nudge the user to pick a demo
+currentRoot = null;
+updateEmptyState();
 
 // test hook for automated browser tests / console debugging
 window.__viewer = {
